@@ -19,7 +19,7 @@ import matplotlib.animation as animation
 # Global constants
 today = dt.date.today()
 path = '/'
-csvfile = 'treasury_yields.csv'
+csvfile = 'TreasuryYields.csv'
 INDEX_ERROR = 3
 FIELD_NAMES = ['Date', '1M', '2M', '3M', '6M', '1Y', '2Y', '3Y',
                '5Y', '7Y', '10Y', '20Y', '30Y']
@@ -62,17 +62,19 @@ def get_treasury_dataframe(file=path+csvfile):
 # note that yield data goes back to 1990; the index
 # was 1. For 01/02/19, the index is 7258. For 01/02/2018,
 # the index is 7009. This is the index we want to begin with.
-def next_http(Index=7258):
+def next_http(index=7258):
     """
     Return the URL of the web page to scrape.
     """
-    return T_HTTP[:66] + str(Index) + ')'
+    return T_HTTP[:66] + str(index) + ')'
 
 
-# We can scrape off data from the Treasury Dept's yield page...
-# Note: Treasury page indicates data in xml format
-# Suggests that the best parser might be the lxml-xml
 def scrape(http, parser='lxml-xml'):
+    """
+    We can scrape off data from the Treasury Dept's yield page...
+    Note: Treasury page indicates data in xml format
+    Suggests that the best parser might be the lxml-xml
+    """
     html_code = uReq(http)
     raw_data = html_code.read()
     html_code.close()
@@ -80,12 +82,13 @@ def scrape(http, parser='lxml-xml'):
     return data
 
 
-# The following function returns a list record of the date and
-# the Treasury yields for that date
-# Note that a Start_Index of 7258 refers to the first bond trading
-# day of 2019
-# Index 6007 corresponds to 2014-01-01.
 def get_new_daily_yields(start_index=6007, end_index=10000):
+    """
+    Returns a dataframe of the new Treasury yield data.
+    Note that a default index 6007 corresponds to 2014-01-01.
+    A start_index of 7258 refers to the first bond trading
+    day of 2019.
+    """
     dates = []
     list_of_daily_yields = []
     index = start_index - 1
@@ -118,15 +121,24 @@ def get_new_daily_yields(start_index=6007, end_index=10000):
     return dataframe.sort_index()
 
 
-# This function appends new yield data to old
 def update_yield_data(existing_df, new_df, save_to_file=None):
+    """
+    This function appends new yield data obtained from scrape
+    and contained in the new dataframe to the existing data. It returns
+    the updated dataframe with all data. Optionally, a file name to save
+    the new dataframe can be given.
+    """
     dataframe = existing_df.append(new_df)
     if save_to_file:
         save_treasury_yield_data(dataframe, file=save_to_file)
     return dataframe.sort_index()
 
 
-def animate_yield_curve(dataframe, rate=5):  # Rate is the no. frames per sec
+def animate_yield_curve(dataframe, rate=5):
+    """
+    Returns an animation plot of the treasury dataframe.
+    Rate is the no. frames per sec.
+    """
     maturities = [0.0833, 0.1667, 0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30]
     labels = ['Maturity (yrs)', 'Yield %', 'Evolution of Treasury Rates']
     interval = int(round(1000/rate, 0))
@@ -140,8 +152,8 @@ def animate_yield_curve(dataframe, rate=5):  # Rate is the no. frames per sec
     line, = ax.plot(maturities, dataframe.values[0], antialiased=False)
 
     def yield_data(i):
-        Legend = [str(dataframe.index[i].date())]
-        ax.legend(Legend)
+        legend = [str(dataframe.index[i].date())]
+        ax.legend(legend)
         line.set_data(maturities, dataframe.values[i])
         if dataframe['2Y'].iloc[i] > dataframe['10Y'].iloc[i]:
             line.set_color('r')
@@ -158,6 +170,15 @@ def animate_yield_curve(dataframe, rate=5):  # Rate is the no. frames per sec
 
 
 def yield_curve(begin_date='1990-01-02', rate=5):
+    """
+    Main program to call. Specify begin_date you want
+    to begin animation for, and the time rate.
+    Obtains existing dataframe of data located on local disk
+    Computes the next index, and adjusts for error.
+    Scrapes web pages for new indexed data, if any
+    Updates existing frame with new date, stores on local disk.
+    Animation begins.
+    """
     begin = dt.datetime.strptime(begin_date, fmt)
     dataframe = get_treasury_dataframe()
     next_index = len(dataframe) + INDEX_ERROR
