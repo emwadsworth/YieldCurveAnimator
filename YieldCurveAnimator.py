@@ -7,53 +7,54 @@ Project: Animated Treasury Yeild Curve
 """
 
 # Modules
+import datetime as dt
+from urllib.request import urlopen as uReq
+from bs4 import BeautifulSoup as soup
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-import datetime as dt
-from urllib.request import urlopen as uReq
-from bs4 import BeautifulSoup as soup
 
 
-# Global variables
-Today = dt.date.today()
-Path = '/Users/edwardmwadsworth/Documents/PY/Data/Economics/'
-File = 'TreasuryYields.csv'
-Index_Error = 3
-FieldNames = ['Date', '1M', '2M', '3M', '6M', '1Y', '2Y', '3Y',
-              '5Y', '7Y', '10Y', '20Y', '30Y']
-Web_http = 'http://data.treasury.gov/Feed.svc/DailyTreasuryYieldCurveRateData(7258)'
+# Global constants
+today = dt.date.today()
+path = '/'
+csvfile = 'treasury_yields.csv'
+INDEX_ERROR = 3
+FIELD_NAMES = ['Date', '1M', '2M', '3M', '6M', '1Y', '2Y', '3Y',
+               '5Y', '7Y', '10Y', '20Y', '30Y']
+T_HTTP = 'http://data.treasury.gov/Feed.svc/DailyTreasuryYieldCurveRateData(7258)'
 fmt = '%Y-%m-%d'
-TermList = ['NEW_DATE', 'BC_1MONTH', 'BC_2MONTH', 'BC_3MONTH', 'BC_6MONTH',
-            'BC_1YEAR', 'BC_2YEAR', 'BC_3YEAR', 'BC_5YEAR', 'BC_7YEAR',
-            'BC_10YEAR', 'BC_20YEAR', 'BC_30YEAR']
+TERM_LIST = ['NEW_DATE', 'BC_1MONTH', 'BC_2MONTH', 'BC_3MONTH', 'BC_6MONTH',
+             'BC_1YEAR', 'BC_2YEAR', 'BC_3YEAR', 'BC_5YEAR', 'BC_7YEAR',
+             'BC_10YEAR', 'BC_20YEAR', 'BC_30YEAR']
 
 
 # File handling routines...
-def save_treasury_yield_data(DF, file=Path+File):
+def save_treasury_yield_data(dataframe, file=path+csvfile):
     """
-    Save the Treasury yields retrieved from Web in file.
-    Convert raw Treasury yield data to Pandas dataframe format
-    DF = pd.DataFrame( Yield_Data,columns=FieldNames, etc.) and save.
+    Save the Treasury yields contained in the dataframe to a local file.
     """
-    DF.to_csv(file,
-              sep=' ',
-              na_rep=np.nan,
-              header=False,
-              index=True,
-              date_format=fmt)
-
-
-# Obtain the Treasury yields from the saved file.
-def get_treasury_dataframe(file=Path+File):
-    DF = pd.read_csv(file,
+    dataframe.to_csv(file,
                      sep=' ',
-                     index_col=0,
-                     names=FieldNames[1:],
-                     parse_dates=True,
-                     infer_datetime_format=True)
-    return DF.sort_index()
+                     na_rep=np.nan,
+                     header=False,
+                     index=True,
+                     date_format=fmt)
+
+
+def get_treasury_dataframe(file=path+csvfile):
+    """
+    Obtain the Treasury yields from the saved file, and
+    return as a dataframe sorted by index.
+    """
+    dataframe = pd.read_csv(file,
+                            sep=' ',
+                            index_col=0,
+                            names=FIELD_NAMES[1:],
+                            parse_dates=True,
+                            infer_datetime_format=True)
+    return dataframe.sort_index()
 
 
 # TREASURY DEPT DATA SCRAPING
@@ -61,18 +62,21 @@ def get_treasury_dataframe(file=Path+File):
 # note that yield data goes back to 1990; the index
 # was 1. For 01/02/19, the index is 7258. For 01/02/2018,
 # the index is 7009. This is the index we want to begin with.
-def HTTP(Index=7258):
-    return Web_http[:66] + str(Index) + ')'
+def next_http(Index=7258):
+    """
+    Return the URL of the web page to scrape.
+    """
+    return T_HTTP[:66] + str(Index) + ')'
 
 
 # We can scrape off data from the Treasury Dept's yield page...
 # Note: Treasury page indicates data in xml format
 # Suggests that the best parser might be the lxml-xml
-def scrape(http, Parser='lxml-xml'):
+def scrape(http, parser='lxml-xml'):
     html_code = uReq(http)
-    RawData = html_code.read()
+    raw_data = html_code.read()
     html_code.close()
-    data = soup(RawData, Parser)
+    data = soup(raw_data, parser)
     return data
 
 
@@ -81,65 +85,65 @@ def scrape(http, Parser='lxml-xml'):
 # Note that a Start_Index of 7258 refers to the first bond trading
 # day of 2019
 # Index 6007 corresponds to 2014-01-01.
-def get_new_daily_yields(Start_Index=6007, End_Index=10000):
-    Dates = []
-    List_of_Daily_Yields = []
-    Index = Start_Index - 1
+def get_new_daily_yields(start_index=6007, end_index=10000):
+    dates = []
+    list_of_daily_yields = []
+    index = start_index - 1
     while True:
         try:
-            Index += 1
-            if Index > End_Index:
+            index += 1
+            if index > end_index:
                 raise Exception
-            Web_http = HTTP(Index)      # Get the next Web page http
-            data = scrape(Web_http)  # Retrieve data from Web page,
+            web_http = next_http(index)      # Get the next Web page http
+            data = scrape(web_http)  # Retrieve data from Web page,
             # &return a beautiful soup parsed object.
             # Cumulate daily yields;
             # note: missing data precludes use of list comprehension
-            Daily_Yields = []
-            for term in TermList:
+            daily_yields = []
+            for term in TERM_LIST:
                 datum = data.find(term).contents
                 if datum:
-                    Daily_Yields.append(datum[0])
+                    daily_yields.append(datum[0])
                 else:
-                    Daily_Yields.append(None)
+                    daily_yields.append(None)
             # reduce datetime to date only:
-            Daily_Yields[0] = Daily_Yields[0][:10]
-            Dates.append(dt.datetime.strptime(Daily_Yields[0], fmt))
-            List_of_Daily_Yields.append(Daily_Yields[1:])
+            daily_yields[0] = daily_yields[0][:10]
+            dates.append(dt.datetime.strptime(daily_yields[0], fmt))
+            list_of_daily_yields.append(daily_yields[1:])
         except:
             break
     # Convert List to DataFrame:
-    DF = pd.DataFrame(List_of_Daily_Yields, index=Dates,
-                      columns=FieldNames[1:], dtype=float).round(2)
-    return DF.sort_index()
+    dataframe = pd.DataFrame(list_of_daily_yields, index=dates,
+                             columns=FIELD_NAMES[1:], dtype=float).round(2)
+    return dataframe.sort_index()
 
 
 # This function appends new yield data to old
-def update_yield_data(Existing_DF, New_DF, SavetoFile=[]):
-    DF = Existing_DF.append(New_DF)
-    if SavetoFile:
-        save_treasury_yield_data(DF, file=SavetoFile)
-    return DF.sort_index()
+def update_yield_data(existing_df, new_df, save_to_file=None):
+    dataframe = existing_df.append(new_df)
+    if save_to_file:
+        save_treasury_yield_data(dataframe, file=save_to_file)
+    return dataframe.sort_index()
 
 
-def animate_yield_curve(df, Rate=5):  # Rate is the no. frames per sec
-    Mat = [0.0833, 0.1667, 0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30]
-    Labels = ['Maturity (yrs)', 'Yield %', 'Evolution of Treasury Rates']
-    Interval = int(round(1000/Rate, 0))
+def animate_yield_curve(dataframe, rate=5):  # Rate is the no. frames per sec
+    maturities = [0.0833, 0.1667, 0.25, 0.5, 1, 2, 3, 5, 7, 10, 20, 30]
+    labels = ['Maturity (yrs)', 'Yield %', 'Evolution of Treasury Rates']
+    interval = int(round(1000/rate, 0))
     fig, ax = plt.subplots(figsize=[10, 8])
     ax.grid(True)
-    ax.set_xlabel(Labels[0])
-    ax.set_ylabel(Labels[1])
-    ax.set_title(Labels[2])
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
+    ax.set_title(labels[2])
     ax.set_xlim(0, 35)
-    ax.set_ylim(0, int(df.fillna(0).values.max()) + 1)
-    line, = ax.plot(Mat, df.values[0], antialiased=False)
+    ax.set_ylim(0, int(dataframe.fillna(0).values.max()) + 1)
+    line, = ax.plot(maturities, dataframe.values[0], antialiased=False)
 
     def yield_data(i):
-        Legend = [str(df.index[i].date())]
+        Legend = [str(dataframe.index[i].date())]
         ax.legend(Legend)
-        line.set_data(Mat, df.values[i])
-        if df['2Y'].iloc[i] > df['10Y'].iloc[i]:
+        line.set_data(maturities, dataframe.values[i])
+        if dataframe['2Y'].iloc[i] > dataframe['10Y'].iloc[i]:
             line.set_color('r')
         else:
             line.set_color('g')
@@ -147,18 +151,17 @@ def animate_yield_curve(df, Rate=5):  # Rate is the no. frames per sec
 
     ani = animation.FuncAnimation(fig, 
                                   yield_data,
-                                  frames=len(df),
-                                  interval=Interval,
+                                  frames=len(dataframe),
+                                  interval=interval,
                                   repeat=True)
     plt.show()
 
 
-def yield_curve(BeginDate='1990-01-02', Rate=5):
-    # Enter BeginDate and Rate
-    Begin = dt.datetime.strptime(BeginDate, fmt)
-    DF = get_treasury_dataframe()
-    Next_Index = len(DF) + Index_Error
-    New_Data = get_new_daily_yields(Next_Index)
-    DF = update_yield_data(DF, New_Data, Path+File)
-    DF = DF[DF.index >= Begin]
-    animate_yield_curve(DF, Rate=Rate)
+def yield_curve(begin_date='1990-01-02', rate=5):
+    begin = dt.datetime.strptime(begin_date, fmt)
+    dataframe = get_treasury_dataframe()
+    next_index = len(dataframe) + INDEX_ERROR
+    new_data = get_new_daily_yields(next_index)
+    dataframe = update_yield_data(dataframe, new_data, path+csvfile)
+    dataframe = dataframe[dataframe.index >= begin]
+    animate_yield_curve(dataframe, rate=rate)
